@@ -15,6 +15,7 @@ import {
 } from "@hungknguyen/docx-math-converter";
 
 const MESSAGE_TYPE = "EXPORT_CHATGPT_CONTENT";
+const PING_TYPE = "CHATGPT_WORD_EXPORTER_PING";
 const exportButton = document.querySelector("#exportButton");
 const statusNode = document.querySelector("#status");
 
@@ -28,11 +29,11 @@ async function exportCurrentAnswer() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-    if (!tab?.id || !isSupportedPage(tab.url)) {
-      throw new Error("请先打开 ChatGPT 对话页面。");
+    if (!tab?.id || !isInjectablePage(tab.url)) {
+      throw new Error("请先打开 ChatGPT 或同界面镜像站的对话页面。");
     }
 
-    const response = await sendMessageToTab(tab.id, { type: MESSAGE_TYPE });
+    const response = await requestExportPayload(tab.id);
 
     if (!response?.ok) {
       throw new Error(response?.error || "页面内容提取失败。");
@@ -55,8 +56,33 @@ async function exportCurrentAnswer() {
   }
 }
 
-function isSupportedPage(url) {
-  return typeof url === "string" && /^https:\/\/(chatgpt\.com|chat\.openai\.com)\//.test(url);
+function isInjectablePage(url) {
+  return typeof url === "string" && /^https?:\/\//.test(url);
+}
+
+async function requestExportPayload(tabId) {
+  try {
+    return await sendMessageToTab(tabId, { type: MESSAGE_TYPE });
+  } catch (error) {
+    const messageText = error instanceof Error ? error.message : String(error);
+
+    if (!/Receiving end does not exist|Could not establish connection/i.test(messageText)) {
+      throw error;
+    }
+
+    setStatus("正在接入当前站点…", false, true);
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["content.js"],
+    });
+
+    await pingTab(tabId);
+    return sendMessageToTab(tabId, { type: MESSAGE_TYPE });
+  }
+}
+
+async function pingTab(tabId) {
+  await sendMessageToTab(tabId, { type: PING_TYPE });
 }
 
 async function sendMessageToTab(tabId, message) {
@@ -66,7 +92,7 @@ async function sendMessageToTab(tabId, message) {
     const messageText = error instanceof Error ? error.message : String(error);
 
     if (/Receiving end does not exist|Could not establish connection/i.test(messageText)) {
-      throw new Error("请先刷新一次 ChatGPT 页面，再重新导出。");
+      throw new Error("当前页面还没有接入导出脚本。");
     }
 
     throw error;

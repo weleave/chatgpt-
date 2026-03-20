@@ -1,28 +1,38 @@
 const MESSAGE_TYPE = "EXPORT_CHATGPT_CONTENT";
+const PING_TYPE = "CHATGPT_WORD_EXPORTER_PING";
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.type !== MESSAGE_TYPE) {
-    return undefined;
-  }
+if (!globalThis.__chatgptWordExporterContentLoaded) {
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message?.type === PING_TYPE) {
+      sendResponse({ ok: true });
+      return false;
+    }
 
-  try {
-    const payload = extractChatContent();
-    sendResponse({ ok: true, payload });
-  } catch (error) {
-    sendResponse({
-      ok: false,
-      error: error instanceof Error ? error.message : "导出失败。",
-    });
-  }
+    if (message?.type !== MESSAGE_TYPE) {
+      return undefined;
+    }
 
-  return false;
-});
+    try {
+      const payload = extractChatContent();
+      sendResponse({ ok: true, payload });
+    } catch (error) {
+      sendResponse({
+        ok: false,
+        error: error instanceof Error ? error.message : "导出失败。",
+      });
+    }
+
+    return false;
+  });
+
+  globalThis.__chatgptWordExporterContentLoaded = true;
+}
 
 function extractChatContent() {
   const fragment = getSelectedFragment() ?? getLatestAssistantFragment();
 
   if (!fragment) {
-    throw new Error("未找到可导出的回答。请先打开 ChatGPT 对话，或手动选中一段回答。");
+    throw new Error("未找到可导出的回答。请先打开 ChatGPT 或同界面镜像站的对话，或手动选中一段回答。");
   }
 
   const blocks = extractBlocks(fragment.root);
