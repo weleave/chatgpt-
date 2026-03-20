@@ -5,7 +5,8 @@
   "description": "Export ChatGPT answers with formulas into a Word document.",
   "permissions": [
     "activeTab",
-    "downloads"
+    "downloads",
+    "scripting"
   ],
   "host_permissions": [
     "https://chatgpt.com/*",

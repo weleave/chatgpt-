@@ -1,25 +1,33 @@
 (() => {
   // src/content.js
   var MESSAGE_TYPE = "EXPORT_CHATGPT_CONTENT";
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message?.type !== MESSAGE_TYPE) {
-      return void 0;
-    }
-    try {
-      const payload = extractChatContent();
-      sendResponse({ ok: true, payload });
-    } catch (error) {
-      sendResponse({
-        ok: false,
-        error: error instanceof Error ? error.message : "\u5BFC\u51FA\u5931\u8D25\u3002"
-      });
-    }
-    return false;
-  });
+  var PING_TYPE = "CHATGPT_WORD_EXPORTER_PING";
+  if (!globalThis.__chatgptWordExporterContentLoaded) {
+    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+      if (message?.type === PING_TYPE) {
+        sendResponse({ ok: true });
+        return false;
+      }
+      if (message?.type !== MESSAGE_TYPE) {
+        return void 0;
+      }
+      try {
+        const payload = extractChatContent();
+        sendResponse({ ok: true, payload });
+      } catch (error) {
+        sendResponse({
+          ok: false,
+          error: error instanceof Error ? error.message : "\u5BFC\u51FA\u5931\u8D25\u3002"
+        });
+      }
+      return false;
+    });
+    globalThis.__chatgptWordExporterContentLoaded = true;
+  }
   function extractChatContent() {
     const fragment = getSelectedFragment() ?? getLatestAssistantFragment();
     if (!fragment) {
-      throw new Error("\u672A\u627E\u5230\u53EF\u5BFC\u51FA\u7684\u56DE\u7B54\u3002\u8BF7\u5148\u6253\u5F00 ChatGPT \u5BF9\u8BDD\uFF0C\u6216\u624B\u52A8\u9009\u4E2D\u4E00\u6BB5\u56DE\u7B54\u3002");
+      throw new Error("\u672A\u627E\u5230\u53EF\u5BFC\u51FA\u7684\u56DE\u7B54\u3002\u8BF7\u5148\u6253\u5F00 ChatGPT \u6216\u540C\u754C\u9762\u955C\u50CF\u7AD9\u7684\u5BF9\u8BDD\uFF0C\u6216\u624B\u52A8\u9009\u4E2D\u4E00\u6BB5\u56DE\u7B54\u3002");
     }
     const blocks = extractBlocks(fragment.root);
     if (!blocks.length) {

@@ -47414,6 +47414,7 @@ ${x(s2, c2)}`;
 
   // src/popup.js
   var MESSAGE_TYPE = "EXPORT_CHATGPT_CONTENT";
+  var PING_TYPE = "CHATGPT_WORD_EXPORTER_PING";
   var exportButton = document.querySelector("#exportButton");
   var statusNode = document.querySelector("#status");
   exportButton.addEventListener("click", () => {
@@ -47423,10 +47424,10 @@ ${x(s2, c2)}`;
     setStatus("\u6B63\u5728\u8BFB\u53D6\u9875\u9762\u5185\u5BB9\u2026", false, true);
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (!tab?.id || !isSupportedPage(tab.url)) {
-        throw new Error("\u8BF7\u5148\u6253\u5F00 ChatGPT \u5BF9\u8BDD\u9875\u9762\u3002");
+      if (!tab?.id || !isInjectablePage(tab.url)) {
+        throw new Error("\u8BF7\u5148\u6253\u5F00 ChatGPT \u6216\u540C\u754C\u9762\u955C\u50CF\u7AD9\u7684\u5BF9\u8BDD\u9875\u9762\u3002");
       }
-      const response = await sendMessageToTab(tab.id, { type: MESSAGE_TYPE });
+      const response = await requestExportPayload(tab.id);
       if (!response?.ok) {
         throw new Error(response?.error || "\u9875\u9762\u5185\u5BB9\u63D0\u53D6\u5931\u8D25\u3002");
       }
@@ -47444,8 +47445,28 @@ ${x(s2, c2)}`;
       setStatus(error instanceof Error ? error.message : "\u5BFC\u51FA\u5931\u8D25\u3002", true, false);
     }
   }
-  function isSupportedPage(url) {
-    return typeof url === "string" && /^https:\/\/(chatgpt\.com|chat\.openai\.com)\//.test(url);
+  function isInjectablePage(url) {
+    return typeof url === "string" && /^https?:\/\//.test(url);
+  }
+  async function requestExportPayload(tabId) {
+    try {
+      return await sendMessageToTab(tabId, { type: MESSAGE_TYPE });
+    } catch (error) {
+      const messageText = error instanceof Error ? error.message : String(error);
+      if (!/Receiving end does not exist|Could not establish connection/i.test(messageText)) {
+        throw error;
+      }
+      setStatus("\u6B63\u5728\u63A5\u5165\u5F53\u524D\u7AD9\u70B9\u2026", false, true);
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ["content.js"]
+      });
+      await pingTab(tabId);
+      return sendMessageToTab(tabId, { type: MESSAGE_TYPE });
+    }
+  }
+  async function pingTab(tabId) {
+    await sendMessageToTab(tabId, { type: PING_TYPE });
   }
   async function sendMessageToTab(tabId, message) {
     try {
@@ -47453,7 +47474,7 @@ ${x(s2, c2)}`;
     } catch (error) {
       const messageText = error instanceof Error ? error.message : String(error);
       if (/Receiving end does not exist|Could not establish connection/i.test(messageText)) {
-        throw new Error("\u8BF7\u5148\u5237\u65B0\u4E00\u6B21 ChatGPT \u9875\u9762\uFF0C\u518D\u91CD\u65B0\u5BFC\u51FA\u3002");
+        throw new Error("\u5F53\u524D\u9875\u9762\u8FD8\u6CA1\u6709\u63A5\u5165\u5BFC\u51FA\u811A\u672C\u3002");
       }
       throw error;
     }
